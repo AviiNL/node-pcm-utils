@@ -1,4 +1,4 @@
-node-pcm-utils
+lbmrn-pcm-utils
 ==============
 
 [![Dependency Status][dependency]][david]
@@ -31,21 +31,14 @@ Installation
 Install with npm:
 
 ```sh
-$ npm install pcm-utils
+$ npm install --save lbmrn-pcm-utils
 ```
-
-or via git:
-
-```sh
-$ npm install git+https://github.com/xdissent/node-pcm-utils.git
-```
-
 
 Usage
 -----
 
 ```js
-var pcmUtils = require('pcm-utils'),
+var pcmUtils = require('lbmrn-pcm-utils'),
 
   // The following variables represent the defaults for all constructors.
   channels = 2,                // 2 channels (left/right)
@@ -92,6 +85,10 @@ var fs = require('fs'),
 formatter.pipe(outFileStream);
 mixer.pipe(formatter);
 ```
+
+## License
+
+MIT
 
   [dependency]: https://img.shields.io/david/livebassmusicrightnow/node-pcm-utils.svg?style=flat-square
   [david]: https://david-dm.org/livebassmusicrightnow/node-pcm-utils
