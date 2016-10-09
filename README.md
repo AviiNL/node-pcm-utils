@@ -1,10 +1,13 @@
 node-pcm-utils
 ==============
 
-[![NPM version](https://badge.fury.io/js/pcm-utils.png)](http://badge.fury.io/js/pcm-utils)
+[![Dependency Status][dependency]][david]
+[![devDependency Status][dev-dependency]][david-dev]
+[![Downloads][downloads]][npm]
 
 PCM audio utilities for Node.js
 
+[![NPM][npm-stats]][npm]
 
 Features
 --------
@@ -89,3 +92,11 @@ var fs = require('fs'),
 formatter.pipe(outFileStream);
 mixer.pipe(formatter);
 ```
+
+  [dependency]: https://img.shields.io/david/livebassmusicrightnow/node-pcm-utils.svg?style=flat-square
+  [david]: https://david-dm.org/livebassmusicrightnow/node-pcm-utils
+  [dev-dependency]: https://img.shields.io/david/dev/livebassmusicrightnow/node-pcm-utils.svg?style=flat-square
+  [david-dev]: https://david-dm.org/livebassmusicrightnow/node-pcm-utils?type=dev
+  [downloads]: https://img.shields.io/npm/dm/lbmrn-pcm-utils.svg?style=flat-square
+  [npm]: https://www.npmjs.org/package/lbmrn-pcm-utils
+  [npm-stats]: https://nodei.co/npm/lbmrn-pcm-utils.png?downloads=true&downloadRank=true&stars=true
