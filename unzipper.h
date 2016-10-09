@@ -3,8 +3,10 @@
 
 #include <cstdlib>
 #include <cstring>
+#include <uv.h>
 #include <node.h>
 #include <node_buffer.h>
+#include <node_object_wrap.h>
 #include "macros.h"
 
 #define UNZ_BUFFER_FRAMES 1024
@@ -22,7 +24,7 @@ public:
 
 protected:
   Unzipper() : ObjectWrap(), channels(0), alignment(0), frameAlignment(0), unzipping(false) {
-    channelBuffers.Clear();
+    channelBuffers.Reset();
   }
 
   ~Unzipper() {
@@ -30,7 +32,7 @@ protected:
     alignment = 0;
     frameAlignment = 0;
     unzipping = false;
-    channelBuffers.Dispose();
+    channelBuffers.Reset();
   }
 
   struct Baton {
@@ -55,18 +57,18 @@ protected:
     int totalFrames;
     int unzippedFrames;
 
-    UnzipBaton(Unzipper* unz_, Handle<Function> cb_, Handle<Object> chunk_) : Baton(unz_), 
+    UnzipBaton(Isolate* isolate, Unzipper* unz_, Handle<Function> cb_, Handle<Object> chunk_) : Baton(unz_),
         chunkLength(0), chunkData(NULL), channelData(NULL), totalFrames(0), unzippedFrames(0) {
 
-      callback = Persistent<Function>::New(cb_);
+      callback.Reset(isolate, cb_);
 
-      chunk = Persistent<Object>::New(chunk_);
-      chunkData = Buffer::Data(chunk);
-      chunkLength = Buffer::Length(chunk);
+      chunk.Reset(isolate, chunk_);
+      chunkData = Buffer::Data(chunk.Get(isolate));
+      chunkLength = Buffer::Length(chunk.Get(isolate));
 
       channelData = (char**)malloc(unz->channels * sizeof(char*));
       for (int i = 0; i < unz->channels; i++) {
-        channelData[i] = Buffer::Data(unz->channelBuffers->Get(i)->ToObject());
+        channelData[i] = Buffer::Data(unz->channelBuffers.Get(isolate)->Get(i)->ToObject());
       }
 
       totalFrames = chunkLength / unz->frameAlignment;
@@ -76,14 +78,14 @@ protected:
       // if (leftoverBytes != 0) fprintf(stderr, "LEFTOVRES: %d\n", leftoverBytes);
     }
     virtual ~UnzipBaton() {
-      callback.Dispose();
-      chunk.Dispose();
+      callback.Reset();
+      chunk.Reset();
       free(channelData);
     }
   };
 
-  static Handle<Value> New(const Arguments& args);
-  static Handle<Value> Unzip(const Arguments& args);
+  static void New(const FunctionCallbackInfo<Value>& args);
+  static void Unzip(const FunctionCallbackInfo<Value>& args);
 
   static void BeginUnzip(Baton* baton);
   static void DoUnzip(uv_work_t* req);

@@ -1,63 +1,67 @@
 #ifndef MACROS_H
 #define MACROS_H
 
-#define NODE_SET_GETTER(target, name, function)                                \
+#define NODE_SET_GETTER(isolate, target, name, function)                       \
   (target)->InstanceTemplate()                                                 \
-    ->SetAccessor(String::NewSymbol(name), (function));
+    ->SetAccessor(String::NewFromUtf8(isolate, name), (function));
 
-#define REQUIRE_ARGUMENTS(n)                                                   \
+#define REQUIRE_ARGUMENTS(isolate, n)                                          \
   if (args.Length() < (n)) {                                                   \
-    return ThrowException(                                                     \
-      Exception::TypeError(String::New("Expected " #n "arguments"))            \
+    isolate->ThrowException(                                                   \
+      Exception::TypeError(String::NewFromUtf8(isolate, "Expected " #n "arguments"))            \
     );                                                                         \
-  }
-
-#define COND_ERR_CALL_VOID(condition, callback, message, context)              \
-  if (condition) {                                                             \
-    if ((callback).IsEmpty() || !(callback)->IsFunction()) {                   \
-      ThrowException(Exception::TypeError(String::New(message)));              \
-      return;                                                                  \
-    }                                                                          \
-    Local<Value> exception = Exception::Error(String::New(message));           \
-    Local<Value> argv[1] = { Local<Value>::New(exception) };                   \
-    TRY_CATCH_CALL((context), (callback), 1, argv);                            \
     return;                                                                    \
   }
 
-#define COND_ERR_CALL(condition, callback, message)                            \
+#define COND_ERR_CALL_VOID(isolate, condition, callback, message, context)     \
   if (condition) {                                                             \
-    if ((callback).IsEmpty() || !(callback)->IsFunction())                     \
-      return ThrowException(Exception::TypeError(String::New(message)));       \
-    Local<Value> exception = Exception::Error(String::New(message));           \
+    if ((callback).IsEmpty() || !(callback)->IsFunction()) {                   \
+      isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, message)));              \
+      return;                                                                  \
+    }                                                                          \
+    Local<Value> exception = Exception::Error(String::NewFromUtf8(isolate, message));           \
     Local<Value> argv[1] = { Local<Value>::New(exception) };                   \
-    TRY_CATCH_CALL(args.Holder(), (callback), 1, argv);                        \
-    return scope.Close(Undefined());                                           \
+    TRY_CATCH_CALL(isolate, (context), (callback), 1, argv);                   \
+    return;                                                                    \
   }
 
-#define OPTIONAL_ARGUMENT_FUNCTION(i, var)                                     \
+#define COND_ERR_CALL(isolate, condition, callback, message)                   \
+  if (condition) {                                                             \
+    if ((callback).IsEmpty() || !(callback)->IsFunction())                     \
+      isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, message)));       \
+      return;                                                                  \
+    Local<Value> exception = Exception::Error(String::NewFromUtf8(isolate, message));           \
+    Local<Value> argv[1] = { Local<Value>::New(isolate, exception) };          \
+    TRY_CATCH_CALL(isolate, args.Holder(), (callback), 1, argv);               \
+    return;                                                                    \
+  }
+
+#define OPTIONAL_ARGUMENT_FUNCTION(isolate, i, var)                            \
   Local<Function> var;                                                         \
   if (args.Length() > i && !args[i]->IsUndefined()) {                          \
     if (!args[i]->IsFunction()) {                                              \
-      return ThrowException(Exception::TypeError(                              \
-        String::New("Argument " #i " must be a function"))                     \
+      isolate->ThrowException(Exception::TypeError(                            \
+        String::NewFromUtf8(isolate, "Argument " #i " must be a function"))    \
       );                                                                       \
+      return;                                                                  \
     }                                                                          \
     var = Local<Function>::Cast(args[i]);                                      \
   }
 
-#define REQUIRE_ARGUMENT_FUNCTION(i, var)                                      \
+#define REQUIRE_ARGUMENT_FUNCTION(isolate, i, var)                             \
   if (args.Length() <= (i) || !args[i]->IsFunction()) {                        \
-    return ThrowException(Exception::TypeError(                                \
-      String::New("Argument " #i " must be a function"))                       \
+    isolate->ThrowException(Exception::TypeError(                              \
+      String::NewFromUtf8(isolate, "Argument " #i " must be a function"))      \
     );                                                                         \
+    return;                                                                    \
   }                                                                            \
   Local<Function> var = Local<Function>::Cast(args[i]);
 
-#define TRY_CATCH_CALL(context, callback, argc, argv)                          \
+#define TRY_CATCH_CALL(isolate, context, callback, argc, argv)                 \
 {   TryCatch try_catch;                                                        \
-    (callback)->Call((context), (argc), (argv));                               \
+    Local<Function>::New(isolate, callback)->Call(isolate->GetCurrentContext(), (context), (argc), (argv));              \
     if (try_catch.HasCaught()) {                                               \
-        FatalException(try_catch);                                             \
+        FatalException(isolate, try_catch);                                    \
     }                                                                          }
 
 #endif

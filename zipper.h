@@ -3,8 +3,10 @@
 
 #include <cstdlib>
 #include <cstring>
+#include <uv.h>
 #include <node.h>
 #include <node_buffer.h>
+#include <node_object_wrap.h>
 #include "macros.h"
 
 #define ZIP_BUFFER_SAMPLES 1024
@@ -22,9 +24,9 @@ public:
 
 protected:
   Zipper() : ObjectWrap(), channels(0), alignment(0), frameAlignment(0), zipping(false), buffer(NULL) {
-    channelBuffers.Clear();
-    channelsReady.Clear();
-    callback.Clear();
+    channelBuffers.Reset();
+    channelsReady.Reset();
+    callback.Reset();
   }
 
   ~Zipper() {
@@ -34,9 +36,9 @@ protected:
     zipping = false;
     if (buffer != NULL) free(buffer);
     buffer = NULL;
-    channelBuffers.Dispose();
-    channelsReady.Dispose();
-    callback.Dispose();
+    channelBuffers.Reset();
+    channelsReady.Reset();
+    callback.Reset();
   }
 
   struct Baton {
@@ -56,21 +58,21 @@ protected:
     Persistent<Function> callback;
     int channel;
 
-    WriteBaton(Zipper* zip_, Handle<Function> cb_, int channel_) : Baton(zip_), channel(channel_) {
-      callback = Persistent<Function>::New(cb_);
+    WriteBaton(Isolate* isolate, Zipper* zip_, Handle<Function> cb_, int channel_) : Baton(zip_), channel(channel_) {
+      callback.Reset(isolate, cb_);
     }
     virtual ~WriteBaton() {
-      callback.Dispose();
+      callback.Reset();
     }
   };
 
   struct ZipBaton : Baton {
     char** channelData;
 
-    ZipBaton(Zipper* zip_) : Baton(zip_), channelData(NULL) {
+    ZipBaton(Isolate* isolate, Zipper* zip_) : Baton(zip_), channelData(NULL) {
       channelData = (char**)malloc(zip->channels * sizeof(char*));
       for (int i = 0; i < zip->channels; i++) {
-        channelData[i] = Buffer::Data(zip->channelBuffers->Get(i)->ToObject());
+        channelData[i] = Buffer::Data(zip->channelBuffers.Get(isolate)->Get(i)->ToObject());
       }
     }
     virtual ~ZipBaton() {
@@ -78,12 +80,12 @@ protected:
     }
   };
 
-  static Handle<Value> New(const Arguments& args);
-  static Handle<Value> Write(const Arguments& args);
-  static Handle<Value> ChannelBuffersGetter(Local<String> str, const AccessorInfo& accessor);
-  static Handle<Value> ChannelsReadyGetter(Local<String> str, const AccessorInfo& accessor);
-  static Handle<Value> SamplesPerBufferGetter(Local<String> str, const AccessorInfo& accessor);
-  static Handle<Value> ZippingGetter(Local<String> str, const AccessorInfo& accessor);
+  static void New(const FunctionCallbackInfo<Value>& args);
+  static void Write(const FunctionCallbackInfo<Value>& args);
+  static void ChannelBuffersGetter(Local<String>, const PropertyCallbackInfo<Value>& args);
+  static void ChannelsReadyGetter(Local<String>, const PropertyCallbackInfo<Value>& args);
+  static void SamplesPerBufferGetter(Local<String>, const PropertyCallbackInfo<Value>& args);
+  static void ZippingGetter(Local<String>, const PropertyCallbackInfo<Value>& args);
 
   static void BeginWrite(Baton* baton);
   static void DoWrite(uv_work_t* req);

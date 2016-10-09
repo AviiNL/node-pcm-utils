@@ -3,23 +3,26 @@
 using namespace pcmutils;
 
 void Formatter::Init(Handle<Object> exports) {
-  Local<FunctionTemplate> tpl = FunctionTemplate::New(New);
+  Isolate *isolate = exports->GetIsolate();
+  Local<FunctionTemplate> tpl = FunctionTemplate::New(isolate, New);
   tpl->InstanceTemplate()->SetInternalFieldCount(1);
-  tpl->SetClassName(String::NewSymbol("Formatter"));
+  tpl->SetClassName(String::NewFromUtf8(isolate, "Formatter"));
 
   NODE_SET_PROTOTYPE_METHOD(tpl, "format", Format);
 
-  Persistent<Function> constructor = Persistent<Function>::New(tpl->GetFunction());
-  exports->Set(String::NewSymbol("Formatter"), constructor);
+  // Persistent<Function> constructor = Persistent<Function>::New(isolate, tpl->GetFunction());
+  exports->Set(String::NewFromUtf8(isolate, "Formatter"), tpl->GetFunction());
 }
 
-Handle<Value> Formatter::New(const Arguments& args) {
-  HandleScope scope;
+void Formatter::New(const FunctionCallbackInfo<Value>& args) {
+  Isolate *isolate = args.GetIsolate();
 
-  if (!args.IsConstructCall())
-    return ThrowException(Exception::TypeError(String::New("Use the new operator")));
+  if (!args.IsConstructCall()) {
+    isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Use the new operator")));
+    return;
+  }
 
-  REQUIRE_ARGUMENTS(2);
+  REQUIRE_ARGUMENTS(isolate, 2);
 
   Formatter* fmt = new Formatter();
   fmt->Wrap(args.This());
@@ -38,24 +41,22 @@ Handle<Value> Formatter::New(const Arguments& args) {
 
   fmt->buffer = (char*)malloc(fmt->outAlignment * FMT_BUFFER_SAMPLES);
 
-  return args.This();
+  args.GetReturnValue().Set(args.This());
 }
 
-Handle<Value> Formatter::Format(const Arguments& args) {
-  HandleScope scope;
+void Formatter::Format(const FunctionCallbackInfo<Value>& args) {
+  Isolate *isolate = args.GetIsolate();
 
-  REQUIRE_ARGUMENTS(2);
-  REQUIRE_ARGUMENT_FUNCTION(1, callback);
+  REQUIRE_ARGUMENTS(isolate, 2);
+  REQUIRE_ARGUMENT_FUNCTION(isolate, 1, callback);
 
   Formatter* fmt = ObjectWrap::Unwrap<Formatter>(args.Holder());
 
-  COND_ERR_CALL(fmt->formatting, callback, "Still formatting");
+  COND_ERR_CALL(isolate, fmt->formatting, callback, "Still formatting");
 
-  FormatBaton* baton = new FormatBaton(fmt, callback, args[0]->ToObject()); 
+  FormatBaton* baton = new FormatBaton(isolate, fmt, callback, args[0]->ToObject());
   fmt->formatting = true;
   BeginFormat(baton);
-
-  return scope.Close(args.Holder());
 }
 
 void Formatter::BeginFormat(Baton* baton) {
@@ -156,23 +157,22 @@ void Formatter::DoFormat(uv_work_t* req) {
 }
 
 void Formatter::AfterFormat(uv_work_t* req) {
-  HandleScope scope;
-
+  Isolate *isolate = Isolate::GetCurrent();
   FormatBaton* baton = static_cast<FormatBaton*>(req->data);
   Formatter* fmt = baton->fmt;
 
   // Copy buffer because we may clobber them soon.
-  Buffer* buffer = Buffer::New(fmt->buffer, baton->formattedSamples * fmt->outAlignment);
+  MaybeLocal<Object> buffer = Buffer::New(isolate, fmt->buffer, baton->formattedSamples * fmt->outAlignment);
 
   if (baton->chunkLength / fmt->inAlignment > static_cast<size_t>(baton->totalSamples)) {
-    Local<Value> argv[3] = { Local<Value>::New(Null()), Local<Value>::New(buffer->handle_), Local<Value>::New(Boolean::New(false)) };
-    TRY_CATCH_CALL(fmt->handle_, baton->callback, 3, argv);
+    Local<Value> argv[3] = { Local<Value>::New(isolate, Null(isolate)), Local<Value>::New(isolate, buffer.ToLocalChecked()), Local<Value>::New(isolate, Boolean::New(isolate, false)) };
+    TRY_CATCH_CALL(isolate, fmt->handle(), baton->callback, 3, argv);
     BeginFormat(baton);
     return;
   }
 
   fmt->formatting = false;
-  Local<Value> argv[3] = { Local<Value>::New(Null()), Local<Value>::New(buffer->handle_), Local<Value>::New(Boolean::New(true)) };
-  TRY_CATCH_CALL(fmt->handle_, baton->callback, 3, argv);
+  Local<Value> argv[3] = { Local<Value>::New(isolate, Null(isolate)), Local<Value>::New(isolate, buffer.ToLocalChecked()), Local<Value>::New(isolate, Boolean::New(isolate, true)) };
+  TRY_CATCH_CALL(isolate, fmt->handle(), baton->callback, 3, argv);
   delete baton;
 }

@@ -3,29 +3,33 @@
 using namespace pcmutils;
 
 void Mixer::Init(Handle<Object> exports) {
-  Local<FunctionTemplate> tpl = FunctionTemplate::New(New);
+  v8::Isolate* isolate;
+  isolate = exports->GetIsolate();
+  Local<FunctionTemplate> tpl = FunctionTemplate::New(isolate, Mixer::New);
   tpl->InstanceTemplate()->SetInternalFieldCount(1);
-  tpl->SetClassName(String::NewSymbol("Mixer"));
+  tpl->SetClassName(String::NewFromUtf8(isolate, "Mixer"));
 
   NODE_SET_PROTOTYPE_METHOD(tpl, "write", Write);
 
-  NODE_SET_GETTER(tpl, "channelBuffers", ChannelBuffersGetter);
-  NODE_SET_GETTER(tpl, "channelsReady", ChannelsReadyGetter);
-  NODE_SET_GETTER(tpl, "samplesPerBuffer", SamplesPerBufferGetter);
-  NODE_SET_GETTER(tpl, "mixing", MixingGetter);
+  NODE_SET_GETTER(isolate, tpl, "channelBuffers", ChannelBuffersGetter);
+  NODE_SET_GETTER(isolate, tpl, "channelsReady", ChannelsReadyGetter);
+  NODE_SET_GETTER(isolate, tpl, "samplesPerBuffer", SamplesPerBufferGetter);
+  NODE_SET_GETTER(isolate, tpl, "mixing", MixingGetter);
 
-  Persistent<Function> constructor = Persistent<Function>::New(tpl->GetFunction());
-  exports->Set(String::NewSymbol("Mixer"), constructor);
+  // Persistent<Function> constructor = Persistent<Function>::New(isolate, tpl->GetFunction());
+  exports->Set(String::NewFromUtf8(isolate, "Mixer"), tpl->GetFunction());
 }
 
-Handle<Value> Mixer::New(const Arguments& args) {
-  HandleScope scope;
+void Mixer::New(const FunctionCallbackInfo<Value>& args) {
+  Isolate *isolate = args.GetIsolate();
 
-  if (!args.IsConstructCall())
-    return ThrowException(Exception::TypeError(String::New("Use the new operator")));
+  if (!args.IsConstructCall()) {
+    isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Use the new operator")));
+    return;
+  }
 
-  REQUIRE_ARGUMENTS(4);
-  REQUIRE_ARGUMENT_FUNCTION(3, callback);
+  REQUIRE_ARGUMENTS(isolate, 4);
+  REQUIRE_ARGUMENT_FUNCTION(isolate, 3, callback);
 
   Mixer* mix = new Mixer();
   mix->Wrap(args.This());
@@ -34,64 +38,64 @@ Handle<Value> Mixer::New(const Arguments& args) {
   mix->alignment = args[1]->Int32Value();
   mix->format = args[2]->Int32Value();
 
-  if (mix->format % 2 > 0)
-    return ThrowException(Exception::TypeError(String::New("Big-Endian formats currently unsupported by Mixer")));
-
-  mix->callback = Persistent<Function>::New(callback);
-  mix->mixing = false;
-
-  mix->channelBuffers = Persistent<Array>::New(Array::New(mix->channels));
-
-  mix->channelsReady = Persistent<Array>::New(Array::New(mix->channels));
-  for (int i = 0; i < mix->channels; i++) {
-    mix->channelsReady->Set(i, Boolean::New(false));
+  if (mix->format % 2 > 0) {
+    isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Big-Endian formats currently unsupported by Mixer")));
+    return;
   }
 
-  return args.This();
+  mix->callback.Reset(isolate, callback);
+  mix->mixing = false;
+
+  mix->channelBuffers.Reset(isolate, Array::New(isolate, mix->channels));
+
+  mix->channelsReady.Reset(isolate, Array::New(isolate, mix->channels));
+  for (int i = 0; i < mix->channels; i++) {
+    mix->channelsReady.Get(isolate)->Set(i, Boolean::New(isolate, false));
+  }
+
+  args.GetReturnValue().Set(args.This());
 }
 
-Handle<Value> Mixer::ChannelBuffersGetter(Local<String> str, const AccessorInfo& accessor) {
-  HandleScope scope;
-  Mixer* mix = ObjectWrap::Unwrap<Mixer>(accessor.This());
-  return mix->channelBuffers;
+void Mixer::ChannelBuffersGetter(Local<String>, const PropertyCallbackInfo<Value>& args) {
+  Mixer* mix = ObjectWrap::Unwrap<Mixer>(args.This());
+  args.GetReturnValue().Set(mix->channelBuffers);
 }
 
-Handle<Value> Mixer::ChannelsReadyGetter(Local<String> str, const AccessorInfo& accessor) {
-  HandleScope scope;
-  Mixer* mix = ObjectWrap::Unwrap<Mixer>(accessor.This());
-  return mix->channelsReady;
+void Mixer::ChannelsReadyGetter(Local<String>, const PropertyCallbackInfo<Value>& args) {
+  Mixer* mix = ObjectWrap::Unwrap<Mixer>(args.This());
+  args.GetReturnValue().Set(mix->channelsReady);
 }
 
-Handle<Value> Mixer::SamplesPerBufferGetter(Local<String> str, const AccessorInfo& accessor) {
-  HandleScope scope;
-  return scope.Close(Integer::New(MIX_BUFFER_SAMPLES));
+void Mixer::SamplesPerBufferGetter(Local<String>, const PropertyCallbackInfo<Value>& args) {
+  Isolate *isolate = args.GetIsolate();
+  args.GetReturnValue().Set(Integer::New(isolate, MIX_BUFFER_SAMPLES));
 }
 
-Handle<Value> Mixer::MixingGetter(Local<String> str, const AccessorInfo& accessor) {
-  HandleScope scope;
-  Mixer* mix = ObjectWrap::Unwrap<Mixer>(accessor.This());
-  return scope.Close(Boolean::New(mix->mixing));
+void Mixer::MixingGetter(Local<String>, const PropertyCallbackInfo<Value>& args) {
+  Isolate *isolate = args.GetIsolate();
+  Mixer* mix = ObjectWrap::Unwrap<Mixer>(args.This());
+  args.GetReturnValue().Set(Boolean::New(isolate, mix->mixing));
 }
 
-Handle<Value> Mixer::Write(const Arguments& args) {
-  HandleScope scope;
+void Mixer::Write(const FunctionCallbackInfo<Value>& args) {
+  Isolate *isolate = args.GetIsolate();
 
-  REQUIRE_ARGUMENTS(2);
-  OPTIONAL_ARGUMENT_FUNCTION(2, callback);
+  REQUIRE_ARGUMENTS(isolate, 2);
+  OPTIONAL_ARGUMENT_FUNCTION(isolate, 2, callback);
 
   Mixer* mix = ObjectWrap::Unwrap<Mixer>(args.Holder());
 
-  COND_ERR_CALL(mix->mixing, callback, "Still mixing");
+  COND_ERR_CALL(isolate, mix->mixing, callback, "Still mixing");
   int channel = args[0]->Int32Value();
-  COND_ERR_CALL(mix->channelsReady->Get(channel)->BooleanValue(), callback, "Already Ready");
+  COND_ERR_CALL(isolate, mix->channelsReady.Get(isolate)->Get(channel)->BooleanValue(), callback, "Already Ready");
 
-  mix->channelBuffers->Set(channel, args[1]->ToObject());
-  mix->channelsReady->Set(channel, Boolean::New(true));
+  mix->channelBuffers.Get(isolate)->Set(channel, args[1]->ToObject());
+  mix->channelsReady.Get(isolate)->Set(channel, Boolean::New(isolate, true));
 
-  WriteBaton* baton = new WriteBaton(mix, callback, channel); 
+  WriteBaton* baton = new WriteBaton(isolate, mix, callback, channel);
   BeginWrite(baton);
 
-  return scope.Close(args.Holder());
+  args.GetReturnValue().Set(args.Holder());
 }
 
 void Mixer::BeginWrite(Baton* baton) {
@@ -103,24 +107,23 @@ void Mixer::DoWrite(uv_work_t* req) {
 }
 
 void Mixer::AfterWrite(uv_work_t* req) {
-  HandleScope scope;
-
+  Isolate *isolate = Isolate::GetCurrent();
   WriteBaton* baton = static_cast<WriteBaton*>(req->data);
   Mixer* mix = baton->mix;
 
-  if (!baton->callback.IsEmpty() && baton->callback->IsFunction()) {
+  if (!baton->callback.IsEmpty() && baton->callback.Get(isolate)->IsFunction()) {
     Local<Value> argv[0] = { };
-    TRY_CATCH_CALL(mix->handle_, baton->callback, 0, argv);
+    TRY_CATCH_CALL(isolate, mix->handle(), baton->callback, 0, argv);
   }
 
   if (!mix->mixing) {
     bool ready = true;
     for (int i = 0; i < mix->channels; i++) {
-      if (!mix->channelsReady->Get(i)->BooleanValue()) ready = false;
+      if (!mix->channelsReady.Get(isolate)->Get(i)->BooleanValue()) ready = false;
     }
 
     if (ready) {
-      MixBaton* mixBaton = new MixBaton(mix);
+      MixBaton* mixBaton = new MixBaton(isolate, mix);
       mix->mixing = true;
       BeginMix(mixBaton);
     }
@@ -134,6 +137,7 @@ void Mixer::BeginMix(Baton* baton) {
 }
 
 void Mixer::DoMix(uv_work_t* req) {
+  Isolate *isolate = Isolate::GetCurrent();
   MixBaton* baton = static_cast<MixBaton*>(req->data);
   Mixer* mix = baton->mix;
 
@@ -177,27 +181,26 @@ void Mixer::DoMix(uv_work_t* req) {
 }
 
 void Mixer::AfterMix(uv_work_t* req) {
-  HandleScope scope;
-
+  Isolate *isolate = Isolate::GetCurrent();
   MixBaton* baton = static_cast<MixBaton*>(req->data);
   Mixer* mix = baton->mix;
 
-  size_t blen = Buffer::Length(mix->channelBuffers->Get(0)->ToObject());
-  Buffer* buffer = Buffer::New(Buffer::Data(mix->channelBuffers->Get(0)->ToObject()), blen);
+  size_t blen = Buffer::Length(mix->channelBuffers.Get(isolate)->Get(0)->ToObject());
+  MaybeLocal<Object> buffer = Buffer::New(isolate, Buffer::Data(mix->channelBuffers.Get(isolate)->Get(0)->ToObject()), blen);
 
   for (int i = 0; i < mix->channels; i++) {
-    mix->channelsReady->Set(i, Boolean::New(false));
+    mix->channelsReady.Get(isolate)->Set(i, Boolean::New(isolate, false));
   }
 
   for (int i = 0; i < mix->channels; i++) {
-    mix->channelBuffers->Set(i, Local<Value>::New(Null()));
+    mix->channelBuffers.Get(isolate)->Set(i, Local<Value>::New(isolate, Null(isolate)));
   }
 
   mix->mixing = false;
   delete baton;
 
-  if (!mix->callback.IsEmpty() && mix->callback->IsFunction()) {
-    Local<Value> argv[2] = { Local<Value>::New(Null()), Local<Value>::New(buffer->handle_) };
-    TRY_CATCH_CALL(mix->handle_, mix->callback, 2, argv);
+  if (!mix->callback.IsEmpty()) {
+    Local<Value> argv[2] = { Local<Value>::New(isolate, Null(isolate)), Local<Value>::New(isolate, buffer.ToLocalChecked()) };
+    TRY_CATCH_CALL(isolate, mix->handle(), mix->callback, 2, argv);
   }
 }

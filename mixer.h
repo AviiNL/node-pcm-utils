@@ -2,8 +2,10 @@
 #define MIXER_H
 
 #include <cstdlib>
+#include <uv.h>
 #include <node.h>
 #include <node_buffer.h>
+#include <node_object_wrap.h>
 #include "macros.h"
 
 #define MIX_BUFFER_SAMPLES 1024
@@ -21,9 +23,9 @@ public:
 
 protected:
   Mixer() : ObjectWrap(), channels(0), alignment(0), format(0), mixing(false) {
-    channelBuffers.Clear();
-    channelsReady.Clear();
-    callback.Clear();
+    channelBuffers.Reset();
+    channelsReady.Reset();
+    callback.Reset();
   }
 
   ~Mixer() {
@@ -31,9 +33,9 @@ protected:
     alignment = 0;
     format = 0;
     mixing = false;
-    channelBuffers.Dispose();
-    channelsReady.Dispose();
-    callback.Dispose();
+    channelBuffers.Reset();
+    channelsReady.Reset();
+    callback.Reset();
   }
 
   struct Baton {
@@ -53,21 +55,21 @@ protected:
     Persistent<Function> callback;
     int channel;
 
-    WriteBaton(Mixer* mix_, Handle<Function> cb_, int channel_) : Baton(mix_), channel(channel_) {
-      callback = Persistent<Function>::New(cb_);
+    WriteBaton(Isolate* isolate, Mixer* mix_, Handle<Function> cb_, int channel_) : Baton(mix_), channel(channel_) {
+      callback.Reset(isolate, cb_);
     }
     virtual ~WriteBaton() {
-      callback.Dispose();
+      callback.Reset();
     }
   };
 
   struct MixBaton : Baton {
     char** channelData;
 
-    MixBaton(Mixer* mix_) : Baton(mix_), channelData(NULL) {
+    MixBaton(Isolate* isolate, Mixer* mix_) : Baton(mix_), channelData(NULL) {
       channelData = (char**)malloc(mix->channels * sizeof(char*));
       for (int i = 0; i < mix->channels; i++) {
-        channelData[i] = Buffer::Data(mix->channelBuffers->Get(i)->ToObject());
+        channelData[i] = Buffer::Data(mix->channelBuffers.Get(isolate)->Get(i)->ToObject());
       }
     }
     virtual ~MixBaton() {
@@ -75,12 +77,12 @@ protected:
     }
   };
 
-  static Handle<Value> New(const Arguments& args);
-  static Handle<Value> Write(const Arguments& args);
-  static Handle<Value> ChannelBuffersGetter(Local<String> str, const AccessorInfo& accessor);
-  static Handle<Value> ChannelsReadyGetter(Local<String> str, const AccessorInfo& accessor);
-  static Handle<Value> SamplesPerBufferGetter(Local<String> str, const AccessorInfo& accessor);
-  static Handle<Value> MixingGetter(Local<String> str, const AccessorInfo& accessor);
+  static void New(const FunctionCallbackInfo<Value>& args);
+  static void Write(const FunctionCallbackInfo<Value>& args);
+  static void ChannelBuffersGetter(Local<String>, const PropertyCallbackInfo<Value>&);
+  static void ChannelsReadyGetter(Local<String>, const PropertyCallbackInfo<Value>&);
+  static void SamplesPerBufferGetter(Local<String>, const PropertyCallbackInfo<Value>&);
+  static void MixingGetter(Local<String>, const PropertyCallbackInfo<Value>&);
 
   static void BeginWrite(Baton* baton);
   static void DoWrite(uv_work_t* req);

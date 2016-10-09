@@ -2,8 +2,10 @@
 #define FORMATTER_H
 
 #include <cstdlib>
+#include <uv.h>
 #include <node.h>
 #include <node_buffer.h>
+#include <node_object_wrap.h>
 #include "macros.h"
 
 #define FMT_BUFFER_SAMPLES 1024
@@ -20,7 +22,7 @@ public:
   static void Init(Handle<Object> exports);
 
 protected:
-  Formatter() : ObjectWrap(), inFormat(0), outFormat(0), 
+  Formatter() : ObjectWrap(), inFormat(0), outFormat(0),
       inAlignment(0), outAlignment(0), formatting(false), buffer(NULL) {
   }
 
@@ -55,22 +57,22 @@ protected:
     int totalSamples;
     int formattedSamples;
 
-    FormatBaton(Formatter* fmt_, Handle<Function> cb_, Handle<Object> chunk_) : Baton(fmt_), 
+    FormatBaton(Isolate* isolate, Formatter* fmt_, Handle<Function> cb_, Handle<Object> chunk_) : Baton(fmt_),
         chunkLength(0), chunkData(NULL), totalSamples(0), formattedSamples(0) {
 
-      callback = Persistent<Function>::New(cb_);
-      chunk = Persistent<Object>::New(chunk_);
-      chunkData = Buffer::Data(chunk);
-      chunkLength = Buffer::Length(chunk);
+      callback.Reset(isolate, cb_);
+      chunk.Reset(isolate, chunk_);
+      chunkData = Buffer::Data(chunk.Get(isolate));
+      chunkLength = Buffer::Length(chunk.Get(isolate));
     }
     virtual ~FormatBaton() {
-      callback.Dispose();
-      chunk.Dispose();
+      callback.Reset();
+      chunk.Reset();
     }
   };
 
-  static Handle<Value> New(const Arguments& args);
-  static Handle<Value> Format(const Arguments& args);
+  static void New(const FunctionCallbackInfo<Value>& args);
+  static void Format(const FunctionCallbackInfo<Value>& args);
 
   static void BeginFormat(Baton* baton);
   static void DoFormat(uv_work_t* req);

@@ -3,23 +3,26 @@
 using namespace pcmutils;
 
 void Unzipper::Init(Handle<Object> exports) {
-  Local<FunctionTemplate> tpl = FunctionTemplate::New(New);
+  Isolate *isolate = exports->GetIsolate();
+  Local<FunctionTemplate> tpl = FunctionTemplate::New(isolate, New);
   tpl->InstanceTemplate()->SetInternalFieldCount(1);
-  tpl->SetClassName(String::NewSymbol("Unzipper"));
+  tpl->SetClassName(String::NewFromUtf8(isolate, "Unzipper"));
 
   NODE_SET_PROTOTYPE_METHOD(tpl, "unzip", Unzip);
 
-  Persistent<Function> constructor = Persistent<Function>::New(tpl->GetFunction());
-  exports->Set(String::NewSymbol("Unzipper"), constructor);
+  // Persistent<Function> constructor = Persistent<Function>::New(isolate, tpl->GetFunction());
+  exports->Set(String::NewFromUtf8(isolate, "Unzipper"), tpl->GetFunction());
 }
 
-Handle<Value> Unzipper::New(const Arguments& args) {
-  HandleScope scope;
+void Unzipper::New(const FunctionCallbackInfo<Value>& args) {
+  Isolate *isolate = args.GetIsolate();
 
-  if (!args.IsConstructCall())
-    return ThrowException(Exception::TypeError(String::New("Use the new operator")));
+  if (!args.IsConstructCall()) {
+    isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Use the new operator")));
+    return;
+  }
 
-  REQUIRE_ARGUMENTS(2);
+  REQUIRE_ARGUMENTS(isolate, 2);
 
   Unzipper* unz = new Unzipper();
   unz->Wrap(args.This());
@@ -29,31 +32,29 @@ Handle<Value> Unzipper::New(const Arguments& args) {
   unz->frameAlignment = unz->channels * unz->alignment;
   unz->unzipping = false;
 
-  unz->channelBuffers = Persistent<Array>::New(Array::New(unz->channels));
+  unz->channelBuffers.Reset(isolate, Array::New(isolate, unz->channels));
   for (int i = 0; i < unz->channels; i++) {
     size_t blen = unz->alignment * UNZ_BUFFER_FRAMES;
-    Buffer* b = Buffer::New(blen);
-    unz->channelBuffers->Set(i, b->handle_);
+    MaybeLocal<Object> b = Buffer::New(isolate, blen);
+    unz->channelBuffers.Get(isolate)->Set(i, b.ToLocalChecked());
   }
 
-  return args.This();
+  args.GetReturnValue().Set(args.This());
 }
 
-Handle<Value> Unzipper::Unzip(const Arguments& args) {
-  HandleScope scope;
+void Unzipper::Unzip(const FunctionCallbackInfo<Value>& args) {
+  Isolate *isolate = args.GetIsolate();
 
-  REQUIRE_ARGUMENTS(2);
-  REQUIRE_ARGUMENT_FUNCTION(1, callback);
+  REQUIRE_ARGUMENTS(isolate, 2);
+  REQUIRE_ARGUMENT_FUNCTION(isolate, 1, callback);
 
   Unzipper* unz = ObjectWrap::Unwrap<Unzipper>(args.Holder());
 
-  COND_ERR_CALL(unz->unzipping, callback, "Still unzipping");
+  COND_ERR_CALL(isolate, unz->unzipping, callback, "Still unzipping");
 
-  UnzipBaton* baton = new UnzipBaton(unz, callback, args[0]->ToObject()); 
+  UnzipBaton* baton = new UnzipBaton(isolate, unz, callback, args[0]->ToObject());
   unz->unzipping = true;
   BeginUnzip(baton);
-
-  return scope.Close(args.Holder());
 }
 
 void Unzipper::BeginUnzip(Baton* baton) {
@@ -79,29 +80,28 @@ void Unzipper::DoUnzip(uv_work_t* req) {
 }
 
 void Unzipper::AfterUnzip(uv_work_t* req) {
-  HandleScope scope;
-
+  Isolate *isolate = Isolate::GetCurrent();
   UnzipBaton* baton = static_cast<UnzipBaton*>(req->data);
   Unzipper* unz = baton->unz;
 
   // Copy buffers because we may clobber them soon.
-  Local<Array> channelBuffersCopy = Local<Array>::New(Array::New(unz->channels));
+  Local<Array> channelBuffersCopy = Local<Array>::New(isolate, Array::New(isolate, unz->channels));
   for (int i = 0; i < unz->channels; i++) {
     // Yes, copy is ok
     size_t blen = unz->alignment * UNZ_BUFFER_FRAMES;
-    Buffer* b = Buffer::New(Buffer::Data(unz->channelBuffers->Get(i)->ToObject()), blen);
-    channelBuffersCopy->Set(i, b->handle_);
+    MaybeLocal<Object> b = Buffer::New(isolate, Buffer::Data(unz->channelBuffers.Get(isolate)->Get(i)->ToObject()), blen);
+    channelBuffersCopy->Set(i, b.ToLocalChecked());
   }
 
   if (baton->unzippedFrames < baton->totalFrames) {
-    Local<Value> argv[3] = { Local<Value>::New(Null()), Local<Value>::New(channelBuffersCopy), Local<Value>::New(Boolean::New(false)) };
-    TRY_CATCH_CALL(unz->handle_, baton->callback, 3, argv);
+    Local<Value> argv[3] = { Local<Value>::New(isolate, Null(isolate)), Local<Value>::New(isolate, channelBuffersCopy), Local<Value>::New(isolate, Boolean::New(isolate, false)) };
+    TRY_CATCH_CALL(isolate, unz->handle(), baton->callback, 3, argv);
     BeginUnzip(baton);
     return;
   }
 
   unz->unzipping = false;
-  Local<Value> argv[3] = { Local<Value>::New(Null()), Local<Value>::New(channelBuffersCopy), Local<Value>::New(Boolean::New(true)) };
-  TRY_CATCH_CALL(unz->handle_, baton->callback, 3, argv);
+  Local<Value> argv[3] = { Local<Value>::New(isolate, Null(isolate)), Local<Value>::New(isolate, channelBuffersCopy), Local<Value>::New(isolate, Boolean::New(isolate, true)) };
+  TRY_CATCH_CALL(isolate, unz->handle(), baton->callback, 3, argv);
   delete baton;
 }
