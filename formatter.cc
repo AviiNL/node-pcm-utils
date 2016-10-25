@@ -158,6 +158,7 @@ void Formatter::DoFormat(uv_work_t* req) {
 
 void Formatter::AfterFormat(uv_work_t* req) {
   Isolate *isolate = Isolate::GetCurrent();
+  HandleScope scope(isolate);
   FormatBaton* baton = static_cast<FormatBaton*>(req->data);
   Formatter* fmt = baton->fmt;
 

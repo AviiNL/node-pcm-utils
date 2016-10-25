@@ -101,6 +101,7 @@ void Zipper::DoWrite(uv_work_t* req) {
 
 void Zipper::AfterWrite(uv_work_t* req) {
   Isolate *isolate = Isolate::GetCurrent();
+  HandleScope scope(isolate);
   WriteBaton* baton = static_cast<WriteBaton*>(req->data);
   Zipper* zip = baton->zip;
 
@@ -146,6 +147,7 @@ void Zipper::DoZip(uv_work_t* req) {
 
 void Zipper::AfterZip(uv_work_t* req) {
   Isolate *isolate = Isolate::GetCurrent();
+  HandleScope scope(isolate);
   ZipBaton* baton = static_cast<ZipBaton*>(req->data);
   Zipper* zip = baton->zip;
 

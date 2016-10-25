@@ -108,6 +108,7 @@ void Mixer::DoWrite(uv_work_t* req) {
 
 void Mixer::AfterWrite(uv_work_t* req) {
   Isolate *isolate = Isolate::GetCurrent();
+  HandleScope scope(isolate);
   WriteBaton* baton = static_cast<WriteBaton*>(req->data);
   Mixer* mix = baton->mix;
 
@@ -182,6 +183,7 @@ void Mixer::DoMix(uv_work_t* req) {
 
 void Mixer::AfterMix(uv_work_t* req) {
   Isolate *isolate = Isolate::GetCurrent();
+  HandleScope scope(isolate);
   MixBaton* baton = static_cast<MixBaton*>(req->data);
   Mixer* mix = baton->mix;
 

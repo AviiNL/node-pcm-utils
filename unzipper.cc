@@ -81,6 +81,7 @@ void Unzipper::DoUnzip(uv_work_t* req) {
 
 void Unzipper::AfterUnzip(uv_work_t* req) {
   Isolate *isolate = Isolate::GetCurrent();
+  HandleScope scope(isolate);
   UnzipBaton* baton = static_cast<UnzipBaton*>(req->data);
   Unzipper* unz = baton->unz;
 
