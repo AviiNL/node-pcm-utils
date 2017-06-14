@@ -106,7 +106,7 @@ void Zipper::AfterWrite(uv_work_t* req) {
   Zipper* zip = baton->zip;
 
   if (!baton->callback.IsEmpty()) {
-    Local<Value> argv[0] = { };
+    Local<Value> argv[1] = { 0 };
     TRY_CATCH_CALL(isolate, zip->handle(), baton->callback, 0, argv);
   }
 

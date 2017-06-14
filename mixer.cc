@@ -113,7 +113,7 @@ void Mixer::AfterWrite(uv_work_t* req) {
   Mixer* mix = baton->mix;
 
   if (!baton->callback.IsEmpty() && baton->callback.Get(isolate)->IsFunction()) {
-    Local<Value> argv[0] = { };
+    Local<Value> argv[1] = { 0 };
     TRY_CATCH_CALL(isolate, mix->handle(), baton->callback, 0, argv);
   }
 
